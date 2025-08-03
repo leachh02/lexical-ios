@@ -8,6 +8,7 @@ import Foundation
 import Lexical
 import LexicalLinkPlugin
 import LexicalListPlugin
+import LexicalInlineImagePlugin
 import Markdown
 
 struct MarkdownImporter: MarkupVisitor {
@@ -128,7 +129,8 @@ struct MarkdownImporter: MarkupVisitor {
   }
 
   mutating func visitImage(_ image: Image) -> Result {
-    return defaultVisit(image)
+    let imageNode = SelectableImageNode(url: image.source!, size: CGSize(width: 300, height: 300), sourceID: "")
+    return [imageNode]
   }
 
   mutating func visitInlineHTML(_ inlineHTML: InlineHTML) -> Result {
