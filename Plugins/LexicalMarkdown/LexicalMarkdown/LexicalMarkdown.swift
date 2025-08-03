@@ -44,7 +44,7 @@ open class LexicalMarkdown: Plugin {
           let document = Document(parsing: string)
 
           var importer = MarkdownImporter()
-          try root.append([importer.visit(document)])
+          try root.append(importer.visit(document))
         }
       }
 }
