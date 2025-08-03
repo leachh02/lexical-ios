@@ -34,4 +34,17 @@ open class LexicalMarkdown: Plugin {
     }
     return markdownString
   }
+    
+    public func parseMarkdown(string: String) throws {
+        try editor?.update {
+          guard let root = self.editor?.getEditorState().getRootNode() else {
+            throw LexicalError.internal("Failed to parse")
+          }
+
+          let document = Document(parsing: string)
+
+          var importer = MarkdownImporter()
+          try root.append([importer.visit(document)])
+        }
+      }
 }
