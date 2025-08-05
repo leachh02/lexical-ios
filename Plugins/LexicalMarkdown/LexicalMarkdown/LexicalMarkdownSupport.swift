@@ -9,6 +9,7 @@ import Foundation
 import Lexical
 import LexicalLinkPlugin
 import LexicalListPlugin
+import LexicalInlineImagePlugin
 import Markdown
 
 private func makeIndentation(_ count: Int) -> String {
@@ -77,7 +78,6 @@ extension LexicalListPlugin.ListNode: NodeMarkdownBlockSupport {
   // Sometimes Lexical will not realise that the top level list has been deleted
   // and so it will look like `List -> ListItem -> List -> [ListItem]` which outputs
   // incorrect markdown. Assume indentations are not properly supported.
-  // Also, no support for checkmarks in Lexical AFAIK.
 
   public func exportBlockMarkdown() throws -> Markdown.BlockMarkup {
     let children = getChildren().exportAsBlockMarkdown()
@@ -86,7 +86,6 @@ extension LexicalListPlugin.ListNode: NodeMarkdownBlockSupport {
     case .bullet:
       return Markdown.UnorderedList(children)
     case .check:
-      // TODO (mani) - how does lexical mark a checked item?
       return Markdown.UnorderedList(children)
     case .number:
       var list = Markdown.OrderedList(children)
@@ -121,9 +120,8 @@ extension LexicalListPlugin.ListItemNode: NodeMarkdownBlockSupport {
       blocks.append(Paragraph(inlineAccumulator))
     }
 
-    if let parent = getParent() as? ListNode, parent.getListType() == .check {
-      // TODO (mani) - how does lexical mark a checked item?
-      return Markdown.ListItem(checkbox: nil, blocks)
+    if let parent = getParent() as? ListNode, parent.getListType() == .check && getIsTask() {
+        return Markdown.ListItem(checkbox: getIsChecked() ? Checkbox.checked : Checkbox.unchecked, blocks)
     } else {
       return Markdown.ListItem(blocks)
     }
@@ -132,9 +130,10 @@ extension LexicalListPlugin.ListItemNode: NodeMarkdownBlockSupport {
 
 extension LexicalLinkPlugin.LinkNode: NodeMarkdownInlineSupport {
   public func exportInlineMarkdown() throws -> Markdown.InlineMarkup {
-    Markdown.Link(
-      destination: getURL(),
-      getChildren()
+      Markdown.Link(
+        destination: getURL(),
+        title: getTitle() ?? "",
+        getChildren()
         .exportAsInlineMarkdown()
         .compactMap { $0 as? Markdown.RecurringInlineMarkup })
   }
@@ -142,9 +141,7 @@ extension LexicalLinkPlugin.LinkNode: NodeMarkdownInlineSupport {
 
 extension Lexical.CodeNode: NodeMarkdownBlockSupport {
   public func exportBlockMarkdown() throws -> Markdown.BlockMarkup {
-    // TODO (mani) - do code blocks have formatting?
-    // TODO (mani) - indentation for codeblocks?
-    Markdown.CodeBlock(getTextContent())
+      Markdown.CodeBlock(language: getLanguage(), getTextContent())
   }
 }
 
@@ -158,10 +155,7 @@ extension Lexical.QuoteNode: NodeMarkdownBlockSupport {
   public func exportBlockMarkdown() throws -> Markdown.BlockMarkup {
     Markdown.BlockQuote(
       getChildren()
-        .exportAsInlineMarkdown()
-        .map {
-          Markdown.Paragraph($0)
-        }
+        .exportAsBlockMarkdown()
     )
   }
 }
@@ -175,6 +169,26 @@ extension Lexical.HeadingNode: NodeMarkdownBlockSupport {
   }
 }
 
+extension LexicalInlineImagePlugin.ImageNode: NodeMarkdownInlineSupport {
+  public func exportInlineMarkdown() throws -> Markdown.InlineMarkup {
+    let altText = getAltText()
+    
+    if !altText.isEmpty {
+      let textMarkup = Markdown.Text(altText)
+      return Markdown.Image(
+        source: getURL(),
+        title: getTitle(),
+        [textMarkup]
+      )
+    } else {
+      return Markdown.Image(
+        source: getURL(),
+        title: getTitle()
+      )
+    }
+  }
+}
+
 private extension HeadingTagType {
   var intValue: Int {
     switch self {
@@ -185,5 +199,26 @@ private extension HeadingTagType {
     case .h5: return 5
     case .h6: return 6
     }
+  }
+}
+
+extension UnsupportedMarkdownNode: NodeMarkdownBlockSupport {
+  public func exportBlockMarkdown() throws -> any Markdown.BlockMarkup {
+      switch getMarkdownType(){
+      case UnsupportedMarkdownType.thematicBreak:
+          return Markdown.ThematicBreak()
+      case UnsupportedMarkdownType.table:
+          let doc = Document(parsing: getRawMarkdown())
+          for child in doc.children {
+              if let table = child as? Markdown.Table {
+                  return table
+              }
+          }
+          return Markdown.Table(columnAlignments: [], body: Markdown.Table.Body([]))
+      case UnsupportedMarkdownType.HTMLBlock:
+        return Markdown.HTMLBlock(getRawMarkdown())
+      case UnsupportedMarkdownType.inlineHTML:
+          return Markdown.HTMLBlock(getRawMarkdown())
+      }
   }
 }
