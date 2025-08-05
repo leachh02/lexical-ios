@@ -16,6 +16,11 @@ open class LexicalMarkdown: Plugin {
 
   public func setUp(editor: Editor) {
     self.editor = editor
+      do {
+          try editor.registerNode(nodeType: NodeType.unsupportedMarkdown, class: UnsupportedMarkdownNode.self)
+      } catch {
+          print("\(error)")
+        }
   }
 
   public func tearDown() {
