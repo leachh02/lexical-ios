@@ -19,7 +19,17 @@ extension CommandType {
 }
 
 public class ImageNode: DecoratorNode {
+  enum CodingKeys: String, CodingKey {
+    case url
+    case title
+    case altText
+    case size
+    case sourceID
+  }
+  
   var url: URL?
+  var title: String?
+  var altText: String = ""
   var size = CGSize.zero
   var sourceID: String = ""
 
@@ -27,10 +37,12 @@ public class ImageNode: DecoratorNode {
     return .image
   }
 
-  public required init(url: String, size: CGSize, sourceID: String, key: NodeKey? = nil) {
+  public required init(url: String, title: String? = nil,  altText: String = "", size: CGSize, sourceID: String, key: NodeKey? = nil) {
     super.init(key)
 
     self.url = URL(string: url)
+    self.title = title
+    self.altText = altText
     self.size = size
     self.sourceID = sourceID
   }
@@ -40,11 +52,28 @@ public class ImageNode: DecoratorNode {
   }
 
   public required init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
     try super.init(from: decoder)
+    
+    if let urlString = try container.decodeIfPresent(String.self, forKey: .url) {
+      self.url = URL(string: urlString)
+    }
+    self.title = try container.decodeIfPresent(String.self, forKey: .title)
+    self.size = try container.decodeIfPresent(CGSize.self, forKey: .size) ?? CGSize.zero
+    self.sourceID = try container.decodeIfPresent(String.self, forKey: .sourceID) ?? ""
+  }
+  
+  override public func encode(to encoder: Encoder) throws {
+    try super.encode(to: encoder)
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encodeIfPresent(self.url?.absoluteString, forKey: .url)
+    try container.encodeIfPresent(self.title, forKey: .title)
+    try container.encode(self.size, forKey: .size)
+    try container.encode(self.sourceID, forKey: .sourceID)
   }
 
   override public func clone() -> Self {
-    Self(url: url?.absoluteString ?? "", size: size, sourceID: sourceID, key: key)
+    Self(url: url?.absoluteString ?? "", title: title, size: size, sourceID: sourceID, key: key)
   }
 
   override public func createView() -> UIImageView {
@@ -67,34 +96,48 @@ public class ImageNode: DecoratorNode {
 
   public func getURL() -> String? {
     let latest: ImageNode = getLatest()
-
     return latest.url?.absoluteString
   }
 
   public func setURL(_ url: String) throws {
     try errorOnReadOnly()
-
     try getWritable().url = URL(string: url)
   }
+  
+  public func getTitle() -> String? {
+    let latest: ImageNode = getLatest()
+    return latest.title
+  }
+
+  public func setTitle(_ title: String?) throws {
+    try errorOnReadOnly()
+    try getWritable().title = title
+  }
+    
+    public func getAltText() -> String {
+        let latest: ImageNode = getLatest()
+        return latest.altText
+      }
+      
+      public func setAltText(_ altText: String) throws {
+        try errorOnReadOnly()
+        try getWritable().altText = altText
+      }
 
   public func getSourceID() -> String? {
     let latest: ImageNode = getLatest()
-
     return latest.sourceID
   }
 
   public func setSourceID(_ sourceID: String) throws {
     try errorOnReadOnly()
-
     try getWritable().sourceID = sourceID
   }
 
   private func createImageView() -> UIImageView {
     let view = UIImageView(frame: CGRect(origin: CGPoint.zero, size: size))
     view.isUserInteractionEnabled = true
-
     view.backgroundColor = .lightGray
-
     return view
   }
 
@@ -131,7 +174,6 @@ public class ImageNode: DecoratorNode {
   let maxImageHeight: CGFloat = 600.0
 
   override open func sizeForDecoratorView(textViewWidth: CGFloat, attributes: [NSAttributedString.Key: Any]) -> CGSize {
-
     if size.width <= textViewWidth {
       return size
     }
