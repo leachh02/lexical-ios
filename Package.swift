@@ -114,6 +114,7 @@ let package = Package(
         "Lexical",
         "LexicalLinkPlugin",
         "LexicalListPlugin",
+        "LexicalInlineImagePlugin",
         .product(name: "Markdown", package: "swift-markdown"),
       ],
       path: "./Plugins/LexicalMarkdown/LexicalMarkdown"),

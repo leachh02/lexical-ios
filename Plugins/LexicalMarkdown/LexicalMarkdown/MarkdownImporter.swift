@@ -14,6 +14,7 @@ import Markdown
 struct MarkdownImporter: MarkupVisitor {
   typealias Result = [Lexical.Node]
 
+  // if the importer can not handle type, retain md syntax
   mutating func defaultVisit(_ markup: Markup) -> Result {
     let paragraph = createParagraphNode()
     let children = markup.children.flatMap { visit($0) }
@@ -33,9 +34,9 @@ struct MarkdownImporter: MarkupVisitor {
   }
 
   mutating func visitCodeBlock(_ codeBlock: CodeBlock) -> Result {
-    let node = createCodeNode()
-    let children = codeBlock.children.flatMap { visit($0) }
-    try? node.append(children)
+    let node = createCodeNode(language: codeBlock.language ?? "")
+    let codeTextnode = Lexical.TextNode(text: codeBlock.code)
+    try? node.append([codeTextnode])
     return [node]
   }
 
@@ -70,20 +71,34 @@ struct MarkdownImporter: MarkupVisitor {
   }
 
   mutating func visitThematicBreak(_ thematicBreak: ThematicBreak) -> Result {
-    return defaultVisit(thematicBreak)
+      let node = UnsupportedMarkdownNode(
+        rawMarkdown: thematicBreak.format(),
+          markdownType: UnsupportedMarkdownType.thematicBreak,
+          key: nil
+      )
+      return [node]
   }
 
-  mutating func visitHTMLBlock(_ html: HTMLBlock) -> Result {
-    return defaultVisit(html)
-  }
+    mutating func visitHTMLBlock(_ html: HTMLBlock) -> Result {
+          let node = UnsupportedMarkdownNode(
+            rawMarkdown: html.rawHTML,
+              markdownType: UnsupportedMarkdownType.HTMLBlock,
+              key: nil
+          )
+          return [node]
+      }
 
-  mutating func visitListItem(_ listItem: ListItem) -> Result {
-    let node = ListItemNode()
-    let children = listItem.children.flatMap { visit($0) }
-    try? node.append(children)
-    return [node]
-  }
-
+    mutating func visitListItem(_ listItem: ListItem) -> Result {
+        let isTask = listItem.checkbox != nil
+        let isChecked = listItem.checkbox == .checked
+        
+        let node = ListItemNode(isTask: isTask, isChecked: isChecked, key: nil)
+        
+        let children = listItem.children.flatMap { visit($0) }
+        try? node.append(children)
+        return [node]
+    }
+    
   mutating func visitOrderedList(_ orderedList: OrderedList) -> Result {
     var node = createListNode(listType: .number)
     if let newNode = try? node.setStart(Int(orderedList.startIndex)) {
@@ -93,13 +108,22 @@ struct MarkdownImporter: MarkupVisitor {
     try? node.append(children)
     return [node]
   }
-
-  mutating func visitUnorderedList(_ unorderedList: UnorderedList) -> Result {
-    let node = createListNode(listType: .bullet)
-    let children = unorderedList.children.flatMap { visit($0) }
-    try? node.append(children)
-    return [node]
-  }
+    mutating func visitUnorderedList(_ unorderedList: UnorderedList) -> Result {
+        // Check if any list items have checkboxes
+        let hasAnyCheckboxes = unorderedList.children.contains { child in
+            if let listItem = child as? ListItem {
+                return listItem.checkbox != nil
+            }
+            return false
+        }
+        
+        let listType: ListType = hasAnyCheckboxes ? .check : .bullet
+        let node = createListNode(listType: listType)
+        
+        let children = unorderedList.children.flatMap { visit($0) }
+        try? node.append(children)
+        return [node]
+    }
 
   mutating func visitParagraph(_ paragraph: Paragraph) -> Result {
     let node = createParagraphNode()
@@ -123,28 +147,44 @@ struct MarkdownImporter: MarkupVisitor {
     return defaultVisit(customInline)
   }
 
-  mutating func visitEmphasis(_ emphasis: Emphasis) -> Result {
-    let text = createTextNode(text: emphasis.plainText)
-    var format = text.getFormat()
-    format.italic = true
-    return [(try? text.setFormat(format: format)) ?? text]
-  }
-
-  mutating func visitImage(_ image: Image) -> Result {
-    let imageNode = SelectableImageNode(url: image.source!, size: CGSize(width: 300, height: 300), sourceID: "")
-    return [imageNode]
-  }
-
+    mutating func visitEmphasis(_ emphasis: Emphasis) -> Result {
+        applyInlineFormat(to: emphasis) { $0.italic = true }
+    }
+    
+    mutating func visitImage(_ image: Image) -> Result {
+      // Extract alt text from children (assuming only Text nodes)
+      let altText = image.children.compactMap { child -> String? in
+        if let textNode = child as? Text {
+          return textNode.string
+        }
+        return nil
+      }.joined(separator: "")
+      
+      let imageNode = ImageNode(
+        url: image.source!,
+        title: image.title,
+        altText: altText,
+        size: CGSize(width: 300, height: 300),
+        sourceID: ""
+      )
+      return [imageNode]
+    }
+    
   mutating func visitInlineHTML(_ inlineHTML: InlineHTML) -> Result {
-    return defaultVisit(inlineHTML)
-  }
+          let node = UnsupportedMarkdownNode(
+            rawMarkdown: inlineHTML.rawHTML,
+              markdownType: UnsupportedMarkdownType.inlineHTML,
+              key: nil
+          )
+          return [node]
+      }
 
   mutating func visitLineBreak(_ lineBreak: LineBreak) -> Result {
     return [Lexical.LineBreakNode()]
   }
 
   mutating func visitLink(_ link: Link) -> Result {
-    let node = LinkPlugin().createLinkNode(url: link.destination ?? "")
+    let node = LinkPlugin().createLinkNode(url: link.destination ?? "", title: link.title)
     let children = link.children.flatMap { visit($0) }
     try? node.append(children)
     return [node]
@@ -154,27 +194,26 @@ struct MarkdownImporter: MarkupVisitor {
     return [Lexical.LineBreakNode()]
   }
 
-  mutating func visitStrong(_ strong: Strong) -> Result {
-    let text = createTextNode(text: strong.plainText)
-    var format = text.getFormat()
-    format.bold = true
-    return [(try? text.setFormat(format: format)) ?? text]
-  }
+mutating func visitStrong(_ strong: Strong) -> Result {
+    applyInlineFormat(to: strong) { $0.bold = true }
+}
 
   mutating func visitText(_ text: Text) -> Result {
     return [Lexical.TextNode(text: text.string)]
   }
 
-  mutating func visitStrikethrough(_ strikethrough: Strikethrough) -> Result {
-    let text = createTextNode(text: strikethrough.plainText)
-    var format = text.getFormat()
-    format.strikethrough = true
-    return [(try? text.setFormat(format: format)) ?? text]
-  }
-
+    mutating func visitStrikethrough(_ strikethrough: Strikethrough) -> Result {
+        applyInlineFormat(to: strikethrough) { $0.strikethrough = true }
+    }
+    
   mutating func visitTable(_ table: Table) -> Result {
-    return defaultVisit(table)
-  }
+        let node = UnsupportedMarkdownNode(
+            rawMarkdown: table.format(),
+            markdownType: UnsupportedMarkdownType.table,
+            key: nil
+        )
+        return [node]
+    }
 
   mutating func visitTableHead(_ tableHead: Table.Head) -> Result {
     return defaultVisit(tableHead)
@@ -207,4 +246,25 @@ struct MarkdownImporter: MarkupVisitor {
   mutating func visitDoxygenReturns(_ doxygenReturns: DoxygenReturns) -> Result {
     return defaultVisit(doxygenReturns)
   }
+    
+    mutating func applyInlineFormat(
+        to inlineMarkup: InlineMarkup,
+        applyFormat: (inout TextFormat) -> Void
+    ) -> [Node] {
+        var result: [Node] = []
+
+        for child in inlineMarkup.children {
+            guard let inline = child as? InlineMarkup else { continue }
+            let visited = try? visit(inline)
+
+            for case let text as TextNode in visited ?? [] {
+                var format = text.getFormat()
+                applyFormat(&format)
+                _ = try? text.setFormat(format: format)
+                result.append(text)
+            }
+        }
+
+        return result
+    }
 }
