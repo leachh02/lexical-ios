@@ -19,6 +19,8 @@ extension NodeType {
 public class ListItemNode: ElementNode {
 
   private var value: Int = 0
+    private var isTask: Bool = false
+    private var isChecked: Bool = false
 
   override public init() {
     super.init()
@@ -27,6 +29,12 @@ public class ListItemNode: ElementNode {
   override public required init(_ key: NodeKey?) {
     super.init(key)
   }
+    
+      public required init(isTask: Bool = false, isChecked: Bool = false, key: NodeKey? = nil) {
+        super.init(key)
+        self.isTask = isTask
+        self.isChecked = isChecked
+      }
 
   public required init(from decoder: Decoder) throws {
     try super.init(from: decoder)
@@ -49,6 +57,28 @@ public class ListItemNode: ElementNode {
     let node = try? self.getWritable()
     node?.value = value
   }
+    
+    public func getIsTask() -> Bool {
+      let node: ListItemNode = getLatest()
+      return node.isTask
+    }
+
+    public func setIsTask(_ isTask: Bool) throws {
+      try errorOnReadOnly()
+      let node = try getWritable() as ListItemNode
+      node.isTask = isTask
+    }
+
+    public func getIsChecked() -> Bool {
+      let node: ListItemNode = getLatest()
+      return node.isChecked
+    }
+
+    public func setIsChecked(_ isChecked: Bool) throws {
+      try errorOnReadOnly()
+      let node = try getWritable() as ListItemNode
+      node.isChecked = isChecked
+    }
 
   override public func append(_ nodesToAppend: [Node]) throws {
     for node in nodesToAppend {
@@ -284,7 +314,7 @@ public class ListItemNode: ElementNode {
         character = String("\(start + prevItemsCount).")
 
       case .check:
-        break
+          character = node.isTask ? (node.isChecked ? "☑" : "☐") : "\u{2022}"
       }
     }
 
