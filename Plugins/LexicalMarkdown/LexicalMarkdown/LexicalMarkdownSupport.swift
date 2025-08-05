@@ -183,6 +183,7 @@ private extension HeadingTagType {
     case .h3: return 3
     case .h4: return 4
     case .h5: return 5
+    case .h6: return 6
     }
   }
 }

@@ -60,6 +60,8 @@ struct MarkdownImporter: MarkupVisitor {
         node = createHeadingNode(headingTag: .h4)
       case 5:
         node = createHeadingNode(headingTag: .h5)
+      case 6:
+        node = createHeadingNode(headingTag: .h6)
       default:
         node = createHeadingNode(headingTag: .h1)
       }
