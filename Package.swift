@@ -42,7 +42,7 @@ let package = Package(
   ],
   dependencies: [
     .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.6.0"),
-    .package(url: "https://github.com/apple/swift-markdown.git", branch: "main"),
+    .package(url: "https://github.com/leachh02/swift-markdown", branch: "feat/format-link-title"),
   ],
   targets: [
     .target(
