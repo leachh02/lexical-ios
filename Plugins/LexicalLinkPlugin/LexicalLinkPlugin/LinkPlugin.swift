@@ -65,9 +65,9 @@ open class LinkPlugin: Plugin {
   public func tearDown() {
   }
 
-  public func createLinkNode(url: String) -> LinkNode {
-    LinkNode(url: url, key: nil)
-  }
+    public func createLinkNode(url: String, title: String? = nil) -> LinkNode {
+        return LinkNode(url: url, title: title, key: nil)
+    }
 
   public func isLinkNode(_ node: Node?) -> Bool {
     node is LinkNode
